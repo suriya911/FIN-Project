@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/reference",
+    "crates/sim",
+    "crates/shell",
+    "crates/tests",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+lto = true
+codegen-units = 1
+debug = true # keep symbols for perf/flamegraph
+
+[profile.bench]
+lto = true
+codegen-units = 1
+debug = true

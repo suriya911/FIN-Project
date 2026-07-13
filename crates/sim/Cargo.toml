@@ -1,0 +1,9 @@
+[package]
+name = "tessera-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Agent-based market simulator: realistic, seeded, deterministic load."
+
+[dependencies]
+tessera-core = { path = "../core" }

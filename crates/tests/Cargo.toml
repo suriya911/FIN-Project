@@ -1,0 +1,11 @@
+[package]
+name = "tessera-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cross-engine test suite: shared unit tests, properties, regressions."
+publish = false
+
+[dependencies]
+tessera-core = { path = "../core" }
+tessera-reference = { path = "../reference" }

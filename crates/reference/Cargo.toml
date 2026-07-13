@@ -1,0 +1,9 @@
+[package]
+name = "tessera-reference"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The oracle: a deliberately slow, obviously correct reference matching engine."
+
+[dependencies]
+tessera-core = { path = "../core" }

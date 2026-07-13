@@ -1,0 +1,11 @@
+[package]
+name = "tessera-shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The imperative shell: I/O, journal, wire codec, CLI. Everything the core is forbidden to do."
+
+[dependencies]
+tessera-core = { path = "../core" }
+tessera-reference = { path = "../reference" }
+tessera-sim = { path = "../sim" }
