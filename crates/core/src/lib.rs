@@ -20,6 +20,7 @@ pub mod arena;
 pub mod book_side;
 pub mod config;
 pub mod events;
+pub mod order_index;
 pub mod types;
 
 pub use arena::{Arena, OrderSlot, NIL};
