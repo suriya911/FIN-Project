@@ -1,0 +1,31 @@
+[package]
+name = "tessera-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Benchmarks: latency percentiles, depth scaling, cancel storm, throughput, no-alloc proof."
+publish = false
+
+[dependencies]
+tessera-core = { path = "../crates/core" }
+tessera-sim = { path = "../crates/sim" }
+hdrhistogram = "7"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[[bench]]
+name = "latency"
+harness = false
+
+[[bench]]
+name = "depth_scaling"
+harness = false
+
+[[bench]]
+name = "cancel_storm"
+harness = false

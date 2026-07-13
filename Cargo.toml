@@ -6,6 +6,7 @@ members = [
     "crates/sim",
     "crates/shell",
     "crates/tests",
+    "benches",
 ]
 # The fuzz package is its own workspace: cargo-fuzz injects sanitizer
 # flags and custom profiles that must not leak into the main build.
