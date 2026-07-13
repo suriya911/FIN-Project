@@ -20,7 +20,7 @@ fn touch_workload(n: usize) -> Vec<InputEvent> {
     while evs.len() + 2 <= n {
         seq += 1;
         id += 1;
-        let bid = id % 2 == 0;
+        let bid = id.is_multiple_of(2);
         evs.push(InputEvent::New {
             seq: Seq(seq),
             order_id: OrderId(id),

@@ -65,7 +65,7 @@ pub fn prefill(book: &mut OrderBook, n: u64) {
     let mid = cfg.min_price + (cfg.num_levels as i64) / 2;
     for i in 0..n {
         // Alternate sides; walk prices outward so levels stay populated.
-        let bid = i % 2 == 0;
+        let bid = i.is_multiple_of(2);
         let off = 2 + (i as i64 / 2) % 1_500;
         let price = if bid { mid - off } else { mid + off };
         buf.clear();
