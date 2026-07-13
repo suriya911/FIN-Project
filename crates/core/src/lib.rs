@@ -16,10 +16,12 @@
 
 extern crate alloc;
 
+pub mod arena;
 pub mod config;
 pub mod events;
 pub mod types;
 
+pub use arena::{Arena, OrderSlot, NIL};
 pub use config::BookConfig;
 pub use events::{CancelReason, InputEvent, OutputEvent, RejectReason};
 pub use types::{OrderId, Price, Qty, SelfTradePrevention, Seq, Side, TimeInForce, TraderId};

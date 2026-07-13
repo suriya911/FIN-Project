@@ -40,6 +40,24 @@ impl Side {
             Side::Ask => Side::Bid,
         }
     }
+
+    /// Compact encoding for the arena's cold fields and the wire codec.
+    #[inline(always)]
+    pub fn to_u8(self) -> u8 {
+        match self {
+            Side::Bid => 0,
+            Side::Ask => 1,
+        }
+    }
+
+    #[inline(always)]
+    pub fn from_u8(v: u8) -> Side {
+        if v == 0 {
+            Side::Bid
+        } else {
+            Side::Ask
+        }
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
@@ -62,4 +80,27 @@ pub enum SelfTradePrevention {
     CancelAggressor,
     /// Cancel both the resting and the incoming order.
     CancelBoth,
+}
+
+impl SelfTradePrevention {
+    /// Compact encoding for the arena's cold fields and the wire codec.
+    #[inline(always)]
+    pub fn to_u8(self) -> u8 {
+        match self {
+            SelfTradePrevention::None => 0,
+            SelfTradePrevention::CancelResting => 1,
+            SelfTradePrevention::CancelAggressor => 2,
+            SelfTradePrevention::CancelBoth => 3,
+        }
+    }
+
+    #[inline(always)]
+    pub fn from_u8(v: u8) -> SelfTradePrevention {
+        match v {
+            1 => SelfTradePrevention::CancelResting,
+            2 => SelfTradePrevention::CancelAggressor,
+            3 => SelfTradePrevention::CancelBoth,
+            _ => SelfTradePrevention::None,
+        }
+    }
 }
