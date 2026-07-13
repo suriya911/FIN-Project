@@ -1,4 +1,4 @@
-//! OrderId -> arena index, in O(1), with no `std::HashMap`.
+//! OrderId -> arena index, in O(1), with no standard-library hash map.
 //!
 //! An open-addressed, linear-probed flat map: power-of-two sized,
 //! pre-allocated at startup, never grows, never hashes with SipHash, and

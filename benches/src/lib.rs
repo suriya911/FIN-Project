@@ -54,6 +54,19 @@ pub fn print_histogram(label: &str, hist: &Histogram<u64>) {
         hist.max(),
         hist.len(),
     );
+    // ASCII histogram, LOG-SCALE y-axis (each '#' is a power of ten), so
+    // the tail stays visible next to the mode.
+    println!("  ns bucket      count  log-scale");
+    let mut lo = 16u64;
+    while lo < hist.max().max(1) {
+        let hi = lo * 2;
+        let count = hist.count_between(lo, hi - 1);
+        if count > 0 {
+            let bar = "#".repeat(((count as f64).log10().max(0.0) as usize) + 1);
+            println!("  {:>9}+  {:>9}  {}", lo, count, bar);
+        }
+        lo = hi;
+    }
 }
 
 /// Pre-fill a book with `n` resting GTC orders spread across levels away
