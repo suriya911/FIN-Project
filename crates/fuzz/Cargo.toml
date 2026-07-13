@@ -1,0 +1,28 @@
+[package]
+name = "tessera-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+tessera-core = { path = "../core" }
+tessera-reference = { path = "../reference" }
+
+[[bin]]
+name = "differential"
+path = "fuzz_targets/differential.rs"
+test = false
+doc = false
+bench = false
+
+# cargo-fuzz needs its own workspace (custom profiles, sanitizer flags).
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
