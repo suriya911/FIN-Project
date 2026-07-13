@@ -493,6 +493,20 @@ impl OrderBook {
     pub fn live_count(&self) -> u32 {
         self.arena.len()
     }
+
+    /// Top-of-book depth ladder: up to `n` occupied levels best-first as
+    /// (price, total quantity, order count). Cold path — TUI and tooling.
+    pub fn depth(&self, side: Side, n: usize) -> alloc::vec::Vec<(Price, u128, u32)> {
+        let bs = self.side(side);
+        let mut out = alloc::vec::Vec::with_capacity(n);
+        let mut lvl = bs.best();
+        while lvl != NIL && out.len() < n {
+            let l = bs.level(lvl);
+            out.push((self.cfg.idx_to_price(lvl), l.total_qty, l.order_count));
+            lvl = bs.next_occupied_worse(lvl);
+        }
+        out
+    }
 }
 
 #[inline(always)]

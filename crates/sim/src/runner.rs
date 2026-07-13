@@ -16,7 +16,8 @@ use tessera_core::{BookConfig, EventBuffer, InputEvent, OrderBook, OutputEvent, 
 #[derive(Copy, Clone, Debug)]
 pub struct SimConfig {
     pub seed: u64,
-    /// Stop once the input log reaches this many events.
+    /// Stop at the end of the first tick where the log reaches this size
+    /// (whole ticks only, so the log can slightly exceed it).
     pub events: usize,
     pub book: BookConfig,
     pub market_makers: u32,
@@ -112,105 +113,154 @@ pub struct SimResult {
     pub final_state_hash: u64,
 }
 
-pub fn run(sc: SimConfig) -> SimResult {
-    let mut rng = Pcg32::new(sc.seed);
-    let cfg = sc.book;
-    let mut book = OrderBook::new(cfg);
-    let mut buf = EventBuffer::for_book(&cfg);
+/// A steppable simulation: the TUI drives it one tick at a time, `run`
+/// drives it to completion. One tick = the price process advances and
+/// every agent acts once.
+pub struct Sim {
+    sc: SimConfig,
+    rng: Pcg32,
+    agents: Vec<Box<dyn Agent>>,
+    ref_f: f64,
+    view: BookView,
+    intents: Vec<Intent>,
+    seq: u64,
+    pub book: OrderBook,
+    buf: EventBuffer,
+    pub stats: Stats,
+    /// Most recent fills (price, qty), newest last. Bounded; for display.
+    pub recent_trades: Vec<(i64, u64)>,
+}
 
-    // Agents in a fixed, deterministic order. TraderId = position.
-    let mut agents: Vec<Box<dyn Agent>> = Vec::new();
-    for _ in 0..sc.market_makers {
-        let i = agents.len() as u32;
-        agents.push(Box::new(MarketMaker::new(i, cfg, &mut rng)));
+impl Sim {
+    pub fn new(sc: SimConfig) -> Self {
+        let mut rng = Pcg32::new(sc.seed);
+        let cfg = sc.book;
+
+        // Agents in a fixed, deterministic order. TraderId = position.
+        let mut agents: Vec<Box<dyn Agent>> = Vec::new();
+        for _ in 0..sc.market_makers {
+            let i = agents.len() as u32;
+            agents.push(Box::new(MarketMaker::new(i, cfg, &mut rng)));
+        }
+        for _ in 0..sc.momentum {
+            let i = agents.len() as u32;
+            agents.push(Box::new(Momentum::new(i, &mut rng)));
+        }
+        for _ in 0..sc.noise {
+            let i = agents.len() as u32;
+            agents.push(Box::new(Noise::new(i, cfg, &mut rng)));
+        }
+        for _ in 0..sc.adversarial {
+            let i = agents.len() as u32;
+            agents.push(Box::new(Adversarial::new(i, cfg, &mut rng)));
+        }
+
+        // Reference price: GBM around the middle of the grid.
+        let span = (cfg.max_price().0 - cfg.min_price) as f64;
+        let ref_f = cfg.min_price as f64 + span / 2.0;
+
+        Sim {
+            sc,
+            rng,
+            agents,
+            ref_f,
+            view: BookView {
+                best_bid: None,
+                best_ask: None,
+                ref_price: Price(ref_f as i64),
+                last_trade: None,
+                live_orders: 0,
+            },
+            intents: Vec::new(),
+            seq: 0,
+            book: OrderBook::new(cfg),
+            buf: EventBuffer::for_book(&cfg),
+            stats: Stats::default(),
+            recent_trades: Vec::new(),
+        }
     }
-    for _ in 0..sc.momentum {
-        let i = agents.len() as u32;
-        agents.push(Box::new(Momentum::new(i, &mut rng)));
-    }
-    for _ in 0..sc.noise {
-        let i = agents.len() as u32;
-        agents.push(Box::new(Noise::new(i, cfg, &mut rng)));
-    }
-    for _ in 0..sc.adversarial {
-        let i = agents.len() as u32;
-        agents.push(Box::new(Adversarial::new(i, cfg, &mut rng)));
+
+    pub fn view(&self) -> &BookView {
+        &self.view
     }
 
-    // Reference price: GBM around the middle of the grid.
-    let span = (cfg.max_price().0 - cfg.min_price) as f64;
-    let mut ref_f = cfg.min_price as f64 + span / 2.0;
-
-    let mut view = BookView {
-        best_bid: None,
-        best_ask: None,
-        ref_price: Price(ref_f as i64),
-        last_trade: None,
-        live_orders: 0,
-    };
-
-    let mut log = Vec::with_capacity(sc.events);
-    let mut stats = Stats::default();
-    let mut intents: Vec<Intent> = Vec::new();
-    let mut seq = 0u64;
-
-    'outer: loop {
+    /// One simulation tick. Input events generated this tick are appended
+    /// to `log_sink` (pass None to discard). Returns events applied.
+    pub fn tick(&mut self, mut log_sink: Option<&mut Vec<InputEvent>>) -> u64 {
+        let cfg = self.sc.book;
         // Advance the true-value process (floats live HERE and only here).
-        ref_f *= (sc.sigma * rng.gauss()).exp();
-        ref_f = ref_f.clamp(cfg.min_price as f64 + 1.0, cfg.max_price().0 as f64 - 1.0);
-        view.ref_price = Price(ref_f as i64);
+        self.ref_f *= (self.sc.sigma * self.rng.gauss()).exp();
+        self.ref_f = self
+            .ref_f
+            .clamp(cfg.min_price as f64 + 1.0, cfg.max_price().0 as f64 - 1.0);
+        self.view.ref_price = Price(self.ref_f as i64);
 
-        for (a_idx, agent) in agents.iter_mut().enumerate() {
-            intents.clear();
-            agent.act(&view, &mut rng, &mut intents);
-            for intent in intents.drain(..) {
-                seq += 1;
-                let ev = intent.into_event(seq, TraderId(a_idx as u32));
-                log.push(ev);
-                stats.inputs += 1;
+        let mut applied = 0u64;
+        for (a_idx, agent) in self.agents.iter_mut().enumerate() {
+            self.intents.clear();
+            agent.act(&self.view, &mut self.rng, &mut self.intents);
+            for intent in self.intents.drain(..) {
+                self.seq += 1;
+                let ev = intent.into_event(self.seq, TraderId(a_idx as u32));
+                if let Some(sink) = log_sink.as_deref_mut() {
+                    sink.push(ev);
+                }
+                applied += 1;
+                self.stats.inputs += 1;
                 match ev {
-                    InputEvent::New { .. } => stats.news += 1,
-                    InputEvent::Cancel { .. } => stats.cancels += 1,
-                    InputEvent::Modify { .. } => stats.modifies += 1,
+                    InputEvent::New { .. } => self.stats.news += 1,
+                    InputEvent::Cancel { .. } => self.stats.cancels += 1,
+                    InputEvent::Modify { .. } => self.stats.modifies += 1,
                 }
 
-                buf.clear();
-                book.apply(ev, &mut buf);
-                for out in buf.as_slice() {
+                self.buf.clear();
+                self.book.apply(ev, &mut self.buf);
+                for out in self.buf.as_slice() {
                     match *out {
-                        OutputEvent::Ack { .. } => stats.acks += 1,
+                        OutputEvent::Ack { .. } => self.stats.acks += 1,
                         OutputEvent::Fill { price, qty, .. } => {
-                            stats.fills += 1;
-                            stats.traded_qty += qty.0 as u128;
-                            view.last_trade = Some(price);
+                            self.stats.fills += 1;
+                            self.stats.traded_qty += qty.0 as u128;
+                            self.view.last_trade = Some(price);
+                            self.recent_trades.push((price.0, qty.0));
+                            if self.recent_trades.len() > 64 {
+                                self.recent_trades.remove(0);
+                            }
                         }
-                        OutputEvent::Cancelled { .. } => stats.cancelled_events += 1,
-                        OutputEvent::Rejected { .. } => stats.rejects += 1,
+                        OutputEvent::Cancelled { .. } => self.stats.cancelled_events += 1,
+                        OutputEvent::Rejected { .. } => self.stats.rejects += 1,
                     }
                 }
-                view.best_bid = book.best_bid();
-                view.best_ask = book.best_ask();
-                view.live_orders = book.live_count();
-
-                if log.len() >= sc.events {
-                    break 'outer;
-                }
+                self.view.best_bid = self.book.best_bid();
+                self.view.best_ask = self.book.best_ask();
+                self.view.live_orders = self.book.live_count();
             }
         }
 
         // Sample microstructure once per tick.
-        stats.depth_samples += 1;
-        stats.depth_sum += book.live_count() as u128;
-        if let (Some(b), Some(a)) = (view.best_bid, view.best_ask) {
-            stats.spread_samples += 1;
-            stats.spread_sum += (a.0 - b.0) as u128;
+        self.stats.depth_samples += 1;
+        self.stats.depth_sum += self.book.live_count() as u128;
+        if let (Some(b), Some(a)) = (self.view.best_bid, self.view.best_ask) {
+            self.stats.spread_samples += 1;
+            self.stats.spread_sum += (a.0 - b.0) as u128;
         }
+        applied
     }
+}
 
+pub fn run(sc: SimConfig) -> SimResult {
+    let mut sim = Sim::new(sc);
+    let mut log = Vec::with_capacity(sc.events);
+    // Whole ticks only — the log may slightly exceed `events`, but it
+    // stays exactly consistent with the final book state and stats
+    // (truncating would break `replay(log) == final_state_hash`).
+    while log.len() < sc.events {
+        sim.tick(Some(&mut log));
+    }
     SimResult {
+        final_state_hash: sim.book.state_hash(),
+        stats: sim.stats,
         log,
-        stats,
-        final_state_hash: book.state_hash(),
     }
 }
 
