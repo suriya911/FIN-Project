@@ -200,24 +200,25 @@ impl ReferenceBook {
             Side::Ask => &mut self.bids,
         };
 
-        let mut i = 0;
-        while remaining > 0 && i < opp.len() {
-            if !crosses(side, price, opp[i].price) {
+        // Every iteration either consumes the FRONT order (index 0) or
+        // exits the loop, so the scan position never advances past 0.
+        while remaining > 0 && !opp.is_empty() {
+            if !crosses(side, price, opp[0].price) {
                 break; // no longer marketable
             }
 
             // -- Self-trade prevention --
-            if stp != SelfTradePrevention::None && opp[i].trader == trader {
+            if stp != SelfTradePrevention::None && opp[0].trader == trader {
                 match stp {
                     SelfTradePrevention::CancelResting => {
-                        let resting = opp.remove(i);
+                        let resting = opp.remove(0);
                         out.push(OutputEvent::Cancelled {
                             seq,
                             order_id: resting.id,
                             remaining: Qty(resting.remaining),
                             reason: CancelReason::SelfTradePrevention,
                         });
-                        continue; // same i now points at the next order
+                        continue; // the next order slides to the front
                     }
                     SelfTradePrevention::CancelAggressor => {
                         out.push(OutputEvent::Cancelled {
@@ -230,7 +231,7 @@ impl ReferenceBook {
                         break;
                     }
                     SelfTradePrevention::CancelBoth => {
-                        let resting = opp.remove(i);
+                        let resting = opp.remove(0);
                         out.push(OutputEvent::Cancelled {
                             seq,
                             order_id: resting.id,
@@ -251,19 +252,19 @@ impl ReferenceBook {
             }
 
             // -- Fill. ALWAYS at the resting order's price. --
-            let fill_qty = remaining.min(opp[i].remaining);
+            let fill_qty = remaining.min(opp[0].remaining);
             out.push(OutputEvent::Fill {
                 seq,
                 taker: order_id,
-                maker: opp[i].id,
-                price: opp[i].price,
+                maker: opp[0].id,
+                price: opp[0].price,
                 qty: Qty(fill_qty),
                 taker_side: side,
             });
             remaining -= fill_qty;
-            opp[i].remaining -= fill_qty;
-            if opp[i].remaining == 0 {
-                opp.remove(i); // fully filled maker leaves the book
+            opp[0].remaining -= fill_qty;
+            if opp[0].remaining == 0 {
+                opp.remove(0); // fully filled maker leaves the book
             }
             // If the maker was only partially filled, `remaining` is now 0
             // and the loop exits on its own.
