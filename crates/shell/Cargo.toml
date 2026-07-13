@@ -6,6 +6,13 @@ license.workspace = true
 description = "The imperative shell: I/O, journal, wire codec, CLI. Everything the core is forbidden to do."
 
 [dependencies]
+crossbeam-queue = "0.3.13"
+crossterm = "0.29.0"
+ratatui = "0.30.2"
 tessera-core = { path = "../core" }
 tessera-reference = { path = "../reference" }
 tessera-sim = { path = "../sim" }
+
+[[bin]]
+name = "tessera"
+path = "src/main.rs"
