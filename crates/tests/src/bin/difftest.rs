@@ -122,7 +122,7 @@ fn main() {
             std::process::exit(1);
         }
         done += 1;
-        if done % 50 == 0 {
+        if done.is_multiple_of(50) {
             eprintln!(
                 "[difftest] {done} seeds x {events} events x {} configs clean ({:.0}s)",
                 CONFIGS.len(),

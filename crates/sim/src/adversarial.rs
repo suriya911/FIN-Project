@@ -39,7 +39,7 @@ impl Agent for Adversarial {
             0 => {
                 let n = 1 + rng.below(8);
                 for _ in 0..n {
-                    let id = self.ids.next();
+                    let id = self.ids.next_id();
                     out.push(Intent::New {
                         order_id: id,
                         side: if rng.chance(50) { Side::Bid } else { Side::Ask },
@@ -60,7 +60,7 @@ impl Agent for Adversarial {
                 } else {
                     (self.cfg.max_price(), Side::Ask)
                 };
-                let id = self.ids.next();
+                let id = self.ids.next_id();
                 self.pending_cancel.push(id);
                 out.push(Intent::New {
                     order_id: id,
@@ -75,7 +75,7 @@ impl Agent for Adversarial {
             2 => {
                 if let Some(ask) = view.best_ask {
                     out.push(Intent::New {
-                        order_id: self.ids.next(),
+                        order_id: self.ids.next_id(),
                         side: Side::Bid,
                         price: ask,
                         qty: Qty(1 + rng.below(30)),
@@ -88,7 +88,7 @@ impl Agent for Adversarial {
             _ => {
                 if let Some(bid) = view.best_bid {
                     out.push(Intent::New {
-                        order_id: self.ids.next(),
+                        order_id: self.ids.next_id(),
                         side: Side::Ask,
                         price: bid,
                         qty: Qty(500 + rng.below(5_000)),

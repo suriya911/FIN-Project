@@ -655,7 +655,7 @@ impl Rng64 {
     pub fn new(seed: u64) -> Self {
         Rng64(seed | 1) // never a zero state
     }
-    pub fn next(&mut self) -> u64 {
+    pub fn next_u64(&mut self) -> u64 {
         let mut x = self.0;
         x ^= x >> 12;
         x ^= x << 25;
@@ -664,7 +664,7 @@ impl Rng64 {
         x.wrapping_mul(0x2545_f491_4f6c_dd1d)
     }
     pub fn below(&mut self, n: u64) -> u64 {
-        self.next() % n
+        self.next_u64() % n
     }
 }
 

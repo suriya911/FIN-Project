@@ -55,7 +55,7 @@ impl Agent for Noise {
         } else {
             TimeInForce::Gtc
         };
-        let id = self.ids.next();
+        let id = self.ids.next_id();
         if tif == TimeInForce::Gtc {
             self.resting.push(id);
         }

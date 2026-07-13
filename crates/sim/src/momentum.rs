@@ -46,7 +46,7 @@ impl Agent for Momentum {
             }
         };
         out.push(Intent::New {
-            order_id: self.ids.next(),
+            order_id: self.ids.next_id(),
             side,
             price: limit,
             qty: Qty(10 + rng.below(190)),

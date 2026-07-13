@@ -4,7 +4,7 @@
 //! same outputs and the same state hash — across runs, machines, and
 //! builds. These tests hold that promise mechanically.
 
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use tessera_core::hash::Fnv1a;
 use tessera_core::{BookConfig, EventBuffer, InputEvent, OrderBook};
 use tessera_tests::{Engine, FastBook, StreamGen, GEN_CFG};

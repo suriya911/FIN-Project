@@ -109,7 +109,7 @@ impl IdGen {
             next: 0,
         }
     }
-    pub fn next(&mut self) -> OrderId {
+    pub fn next_id(&mut self) -> OrderId {
         self.next += 1;
         OrderId(self.base | self.next)
     }

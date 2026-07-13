@@ -58,8 +58,8 @@ impl Agent for MarketMaker {
             if let Some((id, _)) = self.live_ask.take() {
                 out.push(Intent::Cancel { order_id: id });
             }
-            let bid_id = self.ids.next();
-            let ask_id = self.ids.next();
+            let bid_id = self.ids.next_id();
+            let ask_id = self.ids.next_id();
             let qty = Qty(self.quote_size + rng.below(5));
             out.push(Intent::New {
                 order_id: bid_id,
