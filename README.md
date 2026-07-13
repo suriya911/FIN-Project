@@ -27,8 +27,8 @@ canonical state hashes, event by event, forever.
 
 | Harness | Volume | Result |
 |---|---|---|
-| `difftest` — seeded streams, 3 book shapes | 5,372 seeds × 20k events × 3 configs ≈ **322M events** | zero divergences |
-| `cargo fuzz` (libFuzzer) differential target | 1.4M structured inputs | zero divergences |
+| `difftest` — seeded streams, 3 book shapes | 14,283 seeds × 20k events × 3 configs ≈ **857M events** | zero divergences |
+| `cargo fuzz` (libFuzzer) differential target | 2.7M structured inputs | zero divergences |
 | proptest — 6 properties, shrinking | 512 cases/property/run in CI | pass |
 | invariant validator (I1–I9) after **every** event in every harness | — | zero violations |
 | 1M-event log × 100 replays (release) | 100M events | byte-identical outputs + state hash |

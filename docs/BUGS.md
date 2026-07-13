@@ -76,8 +76,8 @@ Campaign on the finished engine, all on this repo's code:
 
 | Harness | Volume | Result |
 |---|---|---|
-| `difftest` (stable, seeded StreamGen, 3 book shapes) | 5,372 seeds × 20,000 events × 3 configs ≈ **322M events** | zero divergences, zero invariant violations |
-| `cargo fuzz run differential` (libFuzzer, ASan) | 1.42M structured inputs, 12 min | zero crashes/divergences |
+| `difftest` (stable, seeded StreamGen, 3 book shapes) | 14,283 seeds × 20,000 events × 3 configs ≈ **857M events** | zero divergences, zero invariant violations |
+| `cargo fuzz run differential` (libFuzzer, ASan) | 2.7M structured inputs across multiple sessions | zero crashes/divergences |
 | proptest `engines_agree` (+5 more properties) | 512 shrinking cases per property per run | all pass |
 | 1M-event log × 100 replays (release) | 100M events | byte-identical outputs + state hash |
 
