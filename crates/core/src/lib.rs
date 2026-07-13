@@ -22,7 +22,9 @@ pub mod book_side;
 pub mod buffer;
 pub mod config;
 pub mod events;
+pub mod hash;
 pub mod order_index;
+pub mod snapshot;
 pub mod types;
 pub mod validate;
 

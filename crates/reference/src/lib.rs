@@ -397,6 +397,41 @@ impl ReferenceBook {
             Side::Ask => &self.asks,
         }
     }
+
+    /// Semantic state hash, byte-identical to `OrderBook::state_hash`:
+    /// bids then asks, levels ascending by index, orders FIFO (seq order)
+    /// within a level. Written in the oracle's slow-and-obvious style —
+    /// a full level scan per side — so the two implementations share
+    /// nothing but the canonical definition.
+    pub fn state_hash(&self) -> u64 {
+        let mut h = tessera_core::hash::Fnv1a::new();
+        for side in [Side::Bid, Side::Ask] {
+            h.write_u8(side.to_u8());
+            let orders = self.side_orders(side);
+            for lvl_idx in 0..self.cfg.num_levels {
+                // The side vec is price-then-seq sorted, so filtering one
+                // level preserves FIFO order.
+                let at_level: Vec<&RefOrder> = orders
+                    .iter()
+                    .filter(|o| self.cfg.price_to_idx(o.price) == Some(lvl_idx))
+                    .collect();
+                if at_level.is_empty() {
+                    continue;
+                }
+                let total: u128 = at_level.iter().map(|o| o.remaining as u128).sum();
+                h.write_u32(lvl_idx);
+                h.write_u128(total);
+                h.write_u32(at_level.len() as u32);
+                for o in at_level {
+                    h.write_u64(o.id.0);
+                    h.write_i64(o.price.0);
+                    h.write_u64(o.remaining);
+                    h.write_u32(o.trader.0);
+                }
+            }
+        }
+        h.finish()
+    }
 }
 
 fn rejected(seq: Seq, order_id: OrderId, reason: RejectReason) -> OutputEvent {

@@ -642,6 +642,167 @@ pub mod cases {
     }
 }
 
+// ---------------------------------------------------------------------
+// Deterministic event-stream generation (used by the determinism tests,
+// the property tests, and the differential harness).
+// ---------------------------------------------------------------------
+
+/// xorshift64*: tiny, seeded, deterministic. NOT the simulator's PRNG —
+/// just enough randomness to stir the pot in tests.
+pub struct Rng64(u64);
+
+impl Rng64 {
+    pub fn new(seed: u64) -> Self {
+        Rng64(seed | 1) // never a zero state
+    }
+    pub fn next(&mut self) -> u64 {
+        let mut x = self.0;
+        x ^= x >> 12;
+        x ^= x << 25;
+        x ^= x >> 27;
+        self.0 = x;
+        x.wrapping_mul(0x2545_f491_4f6c_dd1d)
+    }
+    pub fn below(&mut self, n: u64) -> u64 {
+        self.next() % n
+    }
+}
+
+/// Stateful generator of plausible-but-adversarial input streams: tracks
+/// (approximately) live order ids so cancels and modifies usually target
+/// real orders, and salts in the nasty cases — unknown/duplicate ids,
+/// wrong traders, boundary and off-grid prices, zero and near-max
+/// quantities, a small trader pool so STP actually triggers.
+pub struct StreamGen {
+    rng: Rng64,
+    cfg: BookConfig,
+    live: Vec<(u64, u32)>, // (order_id, trader); approximate — fills not tracked
+    next_id: u64,
+    seq: u64,
+}
+
+impl StreamGen {
+    pub fn new(seed: u64, cfg: BookConfig) -> Self {
+        StreamGen {
+            rng: Rng64::new(seed),
+            cfg,
+            live: Vec::new(),
+            next_id: 1,
+            seq: 0,
+        }
+    }
+
+    fn price(&mut self) -> i64 {
+        let levels = self.cfg.num_levels as u64;
+        let roll = self.rng.below(100);
+        let idx = if roll < 80 {
+            // Cluster around the middle so the two sides actually meet.
+            let mid = levels / 2;
+            let spread = (levels / 8).max(1);
+            mid.saturating_sub(spread / 2) + self.rng.below(spread)
+        } else if roll < 90 {
+            self.rng.below(levels) // anywhere
+        } else if roll < 95 {
+            if self.rng.below(2) == 0 {
+                0
+            } else {
+                levels - 1
+            } // exact boundaries
+        } else {
+            // Off the grid: below min, above max, or off-tick.
+            return match self.rng.below(3) {
+                0 => self.cfg.min_price - 1 - self.rng.below(100) as i64,
+                1 => self.cfg.max_price().0 + 1 + self.rng.below(100) as i64,
+                _ => self.cfg.min_price + self.rng.below(levels) as i64 * self.cfg.tick_size + 1,
+            };
+        };
+        self.cfg.min_price + (idx.min(levels - 1)) as i64 * self.cfg.tick_size
+    }
+
+    fn qty(&mut self) -> u64 {
+        match self.rng.below(100) {
+            0..=79 => 1 + self.rng.below(100),
+            80..=92 => 1 + self.rng.below(10_000),
+            93..=95 => 0,                                // ZeroQty reject path
+            96..=97 => u64::MAX - self.rng.below(3),     // overflow hunting
+            _ => u64::MAX / 2 + self.rng.below(1 << 32), // still absurd
+        }
+    }
+
+    pub fn next_event(&mut self) -> InputEvent {
+        self.seq += 1;
+        let seq = self.seq;
+        let roll = self.rng.below(100);
+
+        if roll < 40 || self.live.is_empty() {
+            // -- New order --
+            let dup = !self.live.is_empty() && self.rng.below(50) == 0;
+            let id = if dup {
+                self.live[self.rng.below(self.live.len() as u64) as usize].0
+            } else {
+                let id = self.next_id;
+                self.next_id += 1;
+                id
+            };
+            let trader = self.rng.below(6) as u32; // small pool -> self-trades happen
+            let side = if self.rng.below(2) == 0 {
+                Side::Bid
+            } else {
+                Side::Ask
+            };
+            let tif = match self.rng.below(100) {
+                0..=79 => TimeInForce::Gtc,
+                80..=91 => TimeInForce::Ioc,
+                _ => TimeInForce::Fok,
+            };
+            let stp = match self.rng.below(100) {
+                0..=84 => SelfTradePrevention::None,
+                85..=89 => SelfTradePrevention::CancelResting,
+                90..=94 => SelfTradePrevention::CancelAggressor,
+                _ => SelfTradePrevention::CancelBoth,
+            };
+            let price = self.price();
+            let qty = self.qty();
+            if !dup && tif == TimeInForce::Gtc && qty > 0 {
+                self.live.push((id, trader));
+            }
+            new_full(seq, id, trader, side, price, qty, tif, stp)
+        } else if roll < 85 {
+            // -- Cancel --
+            match self.rng.below(20) {
+                0 => cancel(seq, self.next_id + 1_000_000, 0), // unknown id
+                1 => {
+                    // wrong trader
+                    let i = self.rng.below(self.live.len() as u64) as usize;
+                    let (id, trader) = self.live[i];
+                    cancel(seq, id, trader + 1)
+                }
+                _ => {
+                    let i = self.rng.below(self.live.len() as u64) as usize;
+                    let (id, trader) = self.live.swap_remove(i);
+                    cancel(seq, id, trader)
+                }
+            }
+        } else {
+            // -- Modify (keeps the id live) --
+            let i = self.rng.below(self.live.len() as u64) as usize;
+            let (id, trader) = self.live[i];
+            let price = self.price();
+            let qty = self.qty();
+            modify(seq, id, trader, price, qty)
+        }
+    }
+}
+
+/// Config used by the generator-driven suites: small enough that levels
+/// empty, the arena fills, and boundaries get hit constantly.
+pub const GEN_CFG: BookConfig = BookConfig {
+    min_price: 1_000,
+    tick_size: 1,
+    num_levels: 256,
+    max_live_orders: 512,
+};
+
 /// Instantiate the whole shared suite for one engine type.
 #[macro_export]
 macro_rules! engine_suite {

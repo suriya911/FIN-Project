@@ -3,7 +3,7 @@
 
 use crate::types::Price;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct BookConfig {
     /// Lowest representable price, in ticks.
     pub min_price: i64,
