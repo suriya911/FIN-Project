@@ -4,3 +4,4 @@
 //! the exact same tests as the oracle.
 
 tessera_tests::engine_suite!(reference, tessera_reference::ReferenceBook);
+tessera_tests::engine_suite!(fast, tessera_tests::FastBook);

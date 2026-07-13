@@ -24,6 +24,30 @@ impl Engine for tessera_reference::ReferenceBook {
     }
 }
 
+/// The fast engine plus its pre-allocated event buffer, with every state
+/// invariant (I1–I9) re-checked after every single event.
+pub struct FastBook {
+    pub book: tessera_core::OrderBook,
+    buf: tessera_core::EventBuffer,
+}
+
+impl Engine for FastBook {
+    fn new(cfg: BookConfig) -> Self {
+        FastBook {
+            book: tessera_core::OrderBook::new(cfg),
+            buf: tessera_core::EventBuffer::for_book(&cfg),
+        }
+    }
+    fn apply(&mut self, ev: InputEvent) -> Vec<OutputEvent> {
+        self.buf.clear();
+        self.book.apply(ev, &mut self.buf);
+        if let Err(violation) = self.book.validate() {
+            panic!("invariant violated after {ev:?}: {violation}");
+        }
+        self.buf.as_slice().to_vec()
+    }
+}
+
 // ---------------------------------------------------------------------
 // Terse constructors: tests read as event-in / events-out tables.
 // ---------------------------------------------------------------------
