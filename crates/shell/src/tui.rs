@@ -34,8 +34,8 @@ pub fn run(sc: SimConfig) -> io::Result<()> {
         while frame_start.elapsed() < Duration::from_millis(15) {
             let t0 = Instant::now();
             let n = sim.tick(None);
-            if n > 0 {
-                let per_event = t0.elapsed().as_nanos() as u64 / n;
+            // checked_div doubles as the n == 0 guard (idle tick).
+            if let Some(per_event) = (t0.elapsed().as_nanos() as u64).checked_div(n) {
                 for _ in 0..n.min(32) {
                     if samples.len() == MAX_SAMPLES {
                         samples.pop_front();
