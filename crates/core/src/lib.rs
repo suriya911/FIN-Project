@@ -17,6 +17,7 @@
 extern crate alloc;
 
 pub mod arena;
+pub mod book_side;
 pub mod config;
 pub mod events;
 pub mod types;
