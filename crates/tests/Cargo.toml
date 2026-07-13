@@ -9,3 +9,6 @@ publish = false
 [dependencies]
 tessera-core = { path = "../core" }
 tessera-reference = { path = "../reference" }
+
+[dev-dependencies]
+proptest = "1.11.0"
